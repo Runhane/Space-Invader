@@ -1,0 +1,115 @@
+module HC05(
+    input sys_clk,
+    input rx,
+    output tx,
+    output wire[1:0]led
+);                                                                              //sys_clk为系统板载时钟（50MHz），rx对应蓝牙模块的tx，tx对应蓝牙模块的rx；led是我设置来判断读入数据错没错的
+    wire[7:0]message;                                                           //message为读入的数据
+    wire sig;                                                                   //sig是读入的完成信号，下降沿表示读入完成，同时作为输出的开始信号
+   
+    uart_r uart_r_1(.clk(sys_clk),.rx(rx),.message(message),.over(sig));        //读入
+    uart_t uart_t_1(.clk(sys_clk),.tx(tx),.message(message),.run(sig));         //输出
+   
+    assign led[0]=message[0];                                                   //这两个看数据最后两位存的对不对的
+    assign led[1]=message[1];
+endmodule
+
+module uart_r(
+    input clk,
+    input wire rx,
+    output reg [7:0]message,
+    output reg over=0
+);                                                      //clk为FPGA板载时钟（50MHz），rx为读入的串行信号，message为对应的并行信号，over的下降沿将表示读入转换完成
+                                               
+    reg [12:0]cnt_clk=0;                                //需要一个量来数clk的个数，每5208个clk，对应0.104us，即波特率9600对应的1bit占用的时常
+    reg [4:0]cnt_message=0;                             //计数message的位数，表征传递进行到了第几位
+    reg [7:0]message_mid=0;                             //message的前体，在over的下降沿传递给message，避免传递没结束，message就有输出值了
+    reg r_start=1;                                      //判断第一个0位，表示传递开始
+   
+    always @(posedge clk)
+    begin
+        if (rx==0&&r_start==1) begin
+            cnt_clk<=cnt_clk+1;
+            if (cnt_clk==2604&&rx==0) begin
+                r_start<=0;
+                cnt_clk<=0;
+                cnt_message<=0;
+                message_mid<=0;
+            end
+        end                                             //判断是否为开始位，是时开始计算clk，数2604下（0.5bit）即在开始位中间，开始读数
+        else if (r_start==0) begin
+            cnt_clk<=cnt_clk+1;
+            if (cnt_clk==5208) begin                    //每5208个clk读一次
+                message_mid[cnt_message]<=rx;
+                cnt_message<=cnt_message+1;
+                cnt_clk<=0;
+            end                                            
+            else if (cnt_message==8) begin              //读完第8位不读了
+                if (cnt_clk==3000) begin                //在数据位第8位的中间往右走2604个clk进入终止位（默认无奇偶校验位），在终止位中（往右走3000个clk和5000个clk之间）输出一个over信号
+                    over<=1;
+                end
+                if (cnt_clk==5000) begin                //over下降沿，传递完成，message_mid赋值给message，所有信号还原
+                    over<=0;
+                    cnt_clk<=0;
+                    cnt_message<=0;
+                    r_start<=1;
+                    message<=message_mid;
+                    message_mid<=0;
+						  
+                end
+            end
+        end                                             //开始读数，每5208个clk读一次
+        else begin
+            r_start<=1;
+            over<=0;
+        end
+    end
+
+endmodule
+
+module uart_t(
+    input wire [7:0]message,
+    input clk,
+    output reg tx=1,
+    input wire run
+    );                                                                  //大致思路与输入类似，tx连接蓝牙的rx，注意run信号为开始信号，连接的输入的over信号
+
+    reg [12:0]cnt_clk=0;
+    reg [4:0]cnt_message=0;
+    reg t_start=1;
+   
+    always @(posedge clk) begin
+        if (run==1&&t_start==1) begin
+            t_start<=0;
+            cnt_clk<=0;
+        end
+        else if (run==0&&t_start==0&&cnt_message==0) begin              //在run的下降沿开始输出
+            tx<=0;
+            cnt_clk<=cnt_clk+1;
+            if (cnt_clk==5208) begin
+                tx<=message[cnt_message];
+                cnt_clk<=0;
+                cnt_message<=1;
+                t_start<=0;
+            end
+        end
+        else if (cnt_message>=1) begin
+            cnt_clk<=cnt_clk+1;
+            if (cnt_clk==5208) begin
+                cnt_clk<=0;
+                if (cnt_message==8) begin
+                    tx<=1;
+                    t_start<=1;
+                    cnt_message<=0;
+                end
+                else begin
+                    tx<=message[cnt_message];
+                    cnt_message<=cnt_message+1;
+                end
+            end
+        end
+        else begin
+            tx=1;
+        end
+    end
+endmodule

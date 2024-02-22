@@ -1,0 +1,12 @@
+Power Analyzer Status : Successful - Tue Dec 06 19:58:25 2022
+Quartus Prime Version : 18.0.0 Build 614 04/24/2018 SJ Standard Edition
+Revision Name : space_invaders
+Top-level Entity Name : space_invaders
+Family : Cyclone IV E
+Device : EP4CE115F29C7
+Power Models : Final
+Total Thermal Power Dissipation : 173.70 mW
+Core Dynamic Thermal Power Dissipation : 0.87 mW
+Core Static Thermal Power Dissipation : 105.21 mW
+I/O Thermal Power Dissipation : 67.62 mW
+Power Estimation Confidence : Low: user provided insufficient toggle rate data
