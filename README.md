@@ -1,5 +1,4 @@
-# Space-Invader
-this project is realized by DE2-115、OpenMV、HC-05
+# FPGA Space Invaders
 
 hello~
 
